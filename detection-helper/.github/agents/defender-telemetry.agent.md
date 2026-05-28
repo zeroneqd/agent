@@ -4,7 +4,7 @@ description: |
   Microsoft Defender XDR, Sysmon, Windows Security audit, and PowerShell
   channels. Produce verification KQL or SPL.
 name: Defender Telemetry
-tools: ['web/fetch', 'search/codebase']
+tools: ['codebase', 'fetch', 'editFiles']
 model: ['Claude Sonnet 4.6', 'Claude Opus 4.6', 'GPT-5.4']
 ---
 
