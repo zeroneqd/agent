@@ -1,0 +1,8 @@
+# Development dependencies for the detection-helper tools test suite.
+# Runtime tools (tools/*.py) use only the Python standard library — there are
+# no runtime dependencies, so this file covers tests/CI only.
+#
+#   pip install -r requirements-dev.txt
+#   pytest -q
+
+pytest>=8,<9

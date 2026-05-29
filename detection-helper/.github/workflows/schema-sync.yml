@@ -38,7 +38,7 @@ jobs:
           CHANGES_LOG=""
           
           for table in "${TABLES[@]}"; do
-            LOCAL_FILE="detection-helper/docs/advanced-hunting/advanced-hunting-${table}-table.md"
+            LOCAL_FILE="docs/advanced-hunting/advanced-hunting-${table}-table.md"
             UPSTREAM_URL="https://raw.githubusercontent.com/MicrosoftDocs/defender-docs/public/defender-xdr/advanced-hunting-${table}-table.md"
             
             if [ -f "$LOCAL_FILE" ]; then
@@ -68,7 +68,7 @@ jobs:
           done
           
           # Check VERSION file age
-          VERSION_FILE="detection-helper/docs/VERSION"
+          VERSION_FILE="docs/VERSION"
           if [ -f "$VERSION_FILE" ]; then
             LAST_UPDATED=$(grep "Last Updated" "$VERSION_FILE" | head -1)
             echo "\n${LAST_UPDATED}"
@@ -139,26 +139,26 @@ jobs:
           echo "=== Validating detection patterns ==="
           
           # Extract ActionTypes from detection patterns
-          PATTERN_ACTIONS=$(grep -rohP 'ActionType == "\K[^"]+' detection-helper/docs/detection-patterns/ detection-helper/docs/detection-fragments/ 2>/dev/null | sort -u)
+          PATTERN_ACTIONS=$(grep -rohP 'ActionType == "\K[^"]+' docs/detection-patterns/ docs/detection-fragments/ 2>/dev/null | sort -u)
           
           # Extract columns from detection patterns
-          PATTERN_COLUMNS=$(grep -rohP 'project\s+[^|]+' detection-helper/docs/detection-patterns/ detection-helper/docs/detection-fragments/ 2>/dev/null | grep -oP '\b[A-Z][a-zA-Z]+\b' | sort -u)
+          PATTERN_COLUMNS=$(grep -rohP 'project\s+[^|]+' docs/detection-patterns/ docs/detection-fragments/ 2>/dev/null | grep -oP '\b[A-Z][a-zA-Z]+\b' | sort -u)
           
           ISSUES=""
           
           # Check if any pattern ActionType appears in schema files
           for action in $PATTERN_ACTIONS; do
             # Check if ActionType appears in any tenant actiontypes file
-            if ! grep -rq "$action" detection-helper/docs/tenant/actiontypes/ 2>/dev/null; then
+            if ! grep -rq "$action" docs/tenant/actiontypes/ 2>/dev/null; then
               # Not in tenant data — check if it's in telemetry-index
-              if ! grep -q "$action" detection-helper/docs/index/telemetry-index.json 2>/dev/null; then
+              if ! grep -q "$action" docs/index/telemetry-index.json 2>/dev/null; then
                 ISSUES="${ISSUES}\n- ActionType \`$action\` used in pattern but not found in tenant data or telemetry index"
               fi
             fi
           done
           
           # Check VERSION age
-          VERSION_FILE="detection-helper/docs/VERSION"
+          VERSION_FILE="docs/VERSION"
           if [ -f "$VERSION_FILE" ]; then
             LAST_UPDATED=$(grep "Last Updated" "$VERSION_FILE" | grep -oP '\d{4}-\d{2}-\d{2}')
             DAYS_OLD=$(( ($(date +%s) - $(date -d "$LAST_UPDATED" +%s)) / 86400 ))
