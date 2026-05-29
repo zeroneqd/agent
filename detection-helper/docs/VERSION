@@ -1,0 +1,67 @@
+Schema Corpus Version Tracking
+==============================
+
+Current Version: 5.0.0
+Last Updated: 2026-05-28
+Upstream Sync Date: 2026-05-27
+Upstream Commit: MicrosoftDocs/defender-docs (public branch, HEAD as of 2026-05-27)
+
+---
+
+Version History:
+  5.0.0 - 2026-05-28 - Python tools replace LLM instructions. 7 deterministic
+                       modules eliminate ~1,760 tokens/query: telemetry resolver,
+                       router, confidence engine, session state machine, primitive
+                       registry, pattern composer, cross-agent validator. Agents
+                       rewritten as thin orchestrators referencing tools/.
+                       Architecture: 4 LLM agents + 7 Python tools.
+  4.0.0 - 2026-05-28 - Speed & accuracy overhaul. Four-agent architecture:
+                       router (entry point) + threat-translator + defender-telemetry
+                       + detection-author. Agent refactoring: thin orchestrators
+                       (76-107 lines) + reference modules (729 lines). Session
+                       state system. Unified L1-L5 confidence ontology. Cross-agent
+                       validation gate. Composable detection fragments (primitives +
+                       combinators). Keyword alias fuzzy matching. Tenant freshness
+                       rules. Rule performance tracker. CI pattern validation.
+  3.0.0 - 2026-05-28 - Added threat-translator agent, operation taxonomy (12
+                       exploit primitives P1-P12), CVE decomposer framework.
+                       Three-agent pipeline: threat translator → telemetry reference
+                       → detection author. Threat-to-detection pipeline complete.
+  2.0.0 - 2026-05-28 - Added detection-author agent, KQL/SPL syntax references,
+                       detection patterns library (5 MITRE-mapped patterns across 5
+                       tactics), security-audit-events.md, windows-events README.
+                       Two-agent architecture: telemetry reference + detection author.
+  1.1.0 - 2026-05-28 - Added structured index, decision matrix, merged actiontypes,
+                       pre-seeded notes, anti-patterns, column validation checklist
+  1.0.0 - 2026-05-27 - Initial schema corpus from MicrosoftDocs/defender-docs
+
+---
+
+Files synchronized from upstream:
+  - docs/advanced-hunting/*.md (per-table schema references)
+  - Schema tables date: 2026-03-28 (ms.date in frontmatter)
+
+Files generated from tenant data:
+  - docs/tenant/actiontypes/*.md (generated 2026-05-27, 7-day lookback)
+  - docs/tenant/all-actiontypes.md (merged view, generated 2026-05-28)
+
+Files maintained manually:
+  - docs/schema-overview.md
+  - docs/windows-events/*.md
+  - docs/notes/*.md
+  - docs/decision-matrix.md
+  - docs/index/telemetry-index.json
+  - docs/query-lang/*.md
+  - docs/detection-patterns/**/*.md
+  - docs/threat-intel/*.md
+  - tools/*.py (Python deterministic modules)
+
+---
+
+Staleness tracking (check on each use):
+  [ ] Run docs/index/telemetry-index.json keywords against current schema-overview.md
+  [ ] Verify tenant actiontypes lookback is within 14 days
+  [ ] Check upstream MicrosoftDocs/defender-docs for schema changes
+  [ ] Review docs/notes/ for outdated platform coverage claims
+
+Next scheduled sync: 2026-06-04 (weekly)

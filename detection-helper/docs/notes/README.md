@@ -1,7 +1,7 @@
 # Notes — curated detection findings
 
 Per-session, user-curated findings from prior agent sessions. Treated as
-trusted supplementary context by `.github/agents/defender-telemetry.agent.md`.
+trusted supplementary context by `.github/agents/detection-helper.agent.md`.
 
 ## When to add a note
 

@@ -1,0 +1,14 @@
+{
+  "session_id": "20260529-051605",
+  "created": "2026-05-29T05:16:05.811659",
+  "updated": "2026-05-29T05:16:05.816432",
+  "status": "telemetry_confirmed",
+  "phases": {
+    "telemetry": {
+      "timestamp": "2026-05-29T05:16:05.815988",
+      "data": {
+        "test": true
+      }
+    }
+  }
+}
