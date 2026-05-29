@@ -93,8 +93,19 @@ pipeline (see "Full pipeline" below) — do not stop at the plan.
    results = p.get_by_name("process spawn")        # fuzzy match
    ordered = p.get_detection_priority(["P7","P1"])  # kill-chain order
    ```
-3. **Resolve telemetry (Python).** For each primitive, `TelemetryResolver().resolve(name)`;
-   check platform gaps with `r.get_platform_gaps(table, platform)`.
+3. **Resolve telemetry (Python).** Map exploit primitives to telemetry primitives,
+   then use `TelemetryResolver().get_actions()` for batch lookup.
+   ```python
+   from tools.primitives import TelemetryPrimitiveResolver
+   from tools.telemetry import TelemetryResolver
+   t = TelemetryPrimitiveResolver()
+   r = TelemetryResolver()
+   # Example: P1 (Process Spawn) → process_creation → Process Creation
+   action_names = t.resolve(["process_creation"])
+   entries = r.get_actions(action_names)  # batch, O(n)
+   for entry in entries:
+       gaps = r.get_platform_gaps(entry.tables[0], "windows")
+   ```
 4. **Rate coverage.** Assign 🟢🟡🔴 per primitive from the telemetry result and the
    confidence level (Path B rules). Behavior over IOCs, always.
 5. **Write session state** for the pipeline:
@@ -113,20 +124,42 @@ pipeline (see "Full pipeline" below) — do not stop at the plan.
 Answer: "is action X on OS Y logged, where, which columns, which ActionType, and
 how do I verify it?"
 
-1. **Resolve.** `results = TelemetryResolver().resolve(user_query)`; if empty, try
-   aliases or the schema overview. Cap at 2 `codebase` searches — use `resolve()` first.
-2. **Validate columns.** `r.validate_columns(columns, table)` → trust its
+1. **Identify primitives (LLM reasoning + catalog).** Receive the telemetry
+   primitive catalog from the system, match the user's intent to the closest
+   security-domain primitives (e.g., "service stop from UI" → `service_management`,
+   `process_creation`). Return your selection as a list of primitive names.
+   ```python
+   from tools.primitives import TelemetryPrimitiveResolver
+   t = TelemetryPrimitiveResolver()
+   # List available primitives when uncertain
+   t.list_primitives()
+   # After selecting primitives, resolve them to action names
+   action_names = t.resolve(["service_management", "process_creation"])
+   ```
+2. **Retrieve telemetry entries (batch).** Use `TelemetryResolver().get_actions()`
+   for exact batch lookup — never iterate with `resolve()`.
+   ```python
+   from tools.telemetry import TelemetryResolver
+   r = TelemetryResolver()
+   entries = r.get_actions(action_names)  # O(n) single scan
+   ```
+   Only use `resolve()` or `resolve_multi()` as a **fallback** when the LLM is
+   uncertain about primitive selection or the input is raw text without clear
+   behavioral intent.
+3. **Validate columns.** `r.validate_columns(columns, table)` → trust its
    `{valid, invalid, antipattern}` output.
-3. **Freshness.** Check `docs/tenant/FRESHNESS.md`; if tenant data > 14 days old,
+4. **Check platform gaps.** `r.get_platform_gaps(table, platform)` for each entry.
+5. **Freshness.** Check `docs/tenant/FRESHNESS.md`; if tenant data > 14 days old,
    downgrade L4 → L3.
-4. **Confidence.**
+6. **Confidence.**
    ```python
    from tools.confidence import Evidence, compute_level
    compute_level(Evidence(schema_confirmed=True, tenant_observed=True))  # → L3 / L4
    ```
-5. **Respond** with YAML frontmatter + a coverage-validator query (required every
+7. **Respond** with YAML frontmatter + a coverage-validator query (required every
    time). Format confidence as `L3: Schema-Confirmed`, `L4: Tenant-Observed`, etc.
-6. If in the pipeline, write `session.write_phase("telemetry", {"primitives_verified": [...]})`.
+   Include the rationale for primitive selection.
+8. If in the pipeline, write `session.write_phase("telemetry", {"primitives_verified": [...]})`.
    See `docs/agent-ref/telemetry-core.md` and `telemetry-caveats.md` for edge cases.
 
 ---

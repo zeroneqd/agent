@@ -4,19 +4,35 @@ Replaces in LLM prompt: 500+ lines of operation-taxonomy.md prose.
 Provides programmatic access to primitive definitions, telemetry mappings,
 kill-chain positions, and blind spots.
 
+Also includes TelemetryPrimitiveResolver — maps natural-language security
+concepts (~20 domain primitives) to Defender XDR action names.  Designed for
+LLM prompt injection: the LLM matches user prompts to primitives, and code
+resolves primitives to concrete telemetry-index.json actions.
+
 Usage:
-    from tools.primitives import PrimitiveRegistry
+    from tools.primitives import PrimitiveRegistry, TelemetryPrimitiveResolver
     p = PrimitiveRegistry()
     info = p.get("P1")
     # → {"name": "Process Spawn", "table": "DeviceProcessEvents", ...}
     early = p.get_by_kill_chain_position("early")
     tables = p.get_tables_for_primitive("P1")
+
+    t = TelemetryPrimitiveResolver()
+    primitives = t.list_primitives()
+    # → ["process_creation", "service_management", ...]
+    actions = t.resolve(["service_management"])
+    # → ["Service Installation"]
 """
 
 from __future__ import annotations
 
+import functools
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
+
+from tools._base import DOCS_DIR
 
 
 @dataclass
@@ -266,23 +282,164 @@ class PrimitiveRegistry:
         return [p.__dict__ for p in _PRIMITIVES]
 
 
+# ── Telemetry Concept Primitive Layer ─────────────────────────────────
+#
+#   Security-domain primitives (~20) that bridge natural language to
+#   Defender XDR action names.  The LLM receives the primitive list,
+#   matches the user prompt, and returns selected primitives.
+#   Code then resolves those primitives to concrete telemetry actions.
+
+
+class TelemetryPrimitiveResolver:
+    """Map security-domain primitives to Defender XDR telemetry actions.
+
+    Usage:
+        t = TelemetryPrimitiveResolver()
+
+        # For LLM prompt — inject the primitive list
+        catalog = t.format_for_prompt()
+        # → "process_creation: A new process is started or spawned
+        #      service_management: Windows services are created, started, ..."
+
+        # LLM returns selected primitives
+        selected = ["service_management", "process_creation"]
+        action_names = t.resolve(selected)
+        # → ["Service Installation", "Process Creation"]
+
+        # Then fetch full entries via TelemetryResolver
+        entries = telemetry_resolver.get_actions(action_names)
+    """
+
+    def __init__(self, mapping_path: Path | None = None) -> None:
+        path = mapping_path or DOCS_DIR / "index" / "primitive-mapping.json"
+        data = self._load(path)
+        self._primitives: list[dict] = data.get("primitives", [])
+        self._by_primitive: dict[str, dict] = {
+            p["primitive"]: p for p in self._primitives
+        }
+        # Build reverse index: action name → list of primitives
+        self._action_to_primitives: dict[str, list[str]] = {}
+        for p in self._primitives:
+            for action in p.get("actions", []):
+                self._action_to_primitives.setdefault(action, []).append(p["primitive"])
+
+    # ── Public API ──────────────────────────────────────────────────────
+
+    def list_primitives(self) -> list[str]:
+        """Return all primitive names for LLM prompt injection."""
+        return [p["primitive"] for p in self._primitives]
+
+    def list_primitive_details(self) -> list[dict]:
+        """Return primitive names with descriptions and indicators."""
+        return [
+            {
+                "primitive": p["primitive"],
+                "description": p["description"],
+                "indicators": p.get("indicators", []),
+                "actions": p.get("actions", []),
+                "note": p.get("note", ""),
+            }
+            for p in self._primitives
+        ]
+
+    def format_for_prompt(self) -> str:
+        """Format primitives as a compact string suitable for LLM prompt.
+
+        ~60-80 tokens.  One line per primitive with description and key
+        indicators in parentheses.
+        """
+        lines = []
+        for p in self._primitives:
+            indicators = ", ".join(p.get("indicators", [])[:3])
+            line = f"- {p['primitive']}: {p['description']}"
+            if indicators:
+                line += f" ({indicators})"
+            if p.get("note"):
+                line += f" [{p['note']}]"
+            lines.append(line)
+        return "\n".join(lines)
+
+    def resolve(self, primitives: list[str]) -> list[str]:
+        """Map selected primitives to Defender XDR action names.
+
+        Returns a deduplicated list of action names.  Each primitive may
+        map to multiple actions (e.g., process_manipulation → Process
+        Injection + LSASS Access).
+
+        Unknown primitives are silently ignored — the caller should
+        validate the LLM's output against list_primitives() first.
+        """
+        actions: set[str] = set()
+        for name in primitives:
+            p = self._by_primitive.get(name.lower().strip())
+            if p:
+                actions.update(p.get("actions", []))
+        return sorted(actions)
+
+    def explain(self, primitive: str) -> dict | None:
+        """Return full details for a primitive — useful for LLM rationale."""
+        p = self._by_primitive.get(primitive.lower().strip())
+        if not p:
+            return None
+        return {
+            "primitive": p["primitive"],
+            "description": p["description"],
+            "indicators": p.get("indicators", []),
+            "actions": p.get("actions", []),
+            "note": p.get("note", ""),
+        }
+
+    def primitives_for_action(self, action_name: str) -> list[str]:
+        """Reverse lookup: which primitives include this action?
+
+        Useful when a TelemetryResolver result needs to be expressed back
+        to the LLM in primitive terms.
+        """
+        return self._action_to_primitives.get(action_name, [])
+
+    # ── Private ─────────────────────────────────────────────────────────
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _load(path: Path) -> dict:
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+
 # ── CLI ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import sys, json
 
-    p = PrimitiveRegistry()
-
-    if len(sys.argv) > 1:
-        pid = sys.argv[1].upper()
-        result = p.get(pid)
-        if result:
-            print(json.dumps(result, indent=2))
+    if len(sys.argv) > 1 and sys.argv[1].startswith("T"):
+        # Telemetry primitive mode
+        t = TelemetryPrimitiveResolver()
+        if sys.argv[1] in ("--list", "-l"):
+            print(json.dumps(t.list_primitive_details(), indent=2))
+        elif sys.argv[1] in ("--prompt", "-p"):
+            print(t.format_for_prompt())
+        elif sys.argv[1] in ("--resolve", "-r") and len(sys.argv) > 2:
+            primitives = [p.strip() for p in sys.argv[2].split(",")]
+            print(json.dumps(t.resolve(primitives), indent=2))
         else:
-            print(f"Unknown primitive: {pid}")
+            print(f"Usage: python -m tools.primitives --{{list|prompt|resolve p1,p2}}")
     else:
-        print(json.dumps({
-            "count": len(_PRIMITIVES),
-            "primitives": [{"id": pr.id, "name": pr.name, "position": pr.kill_chain_position}
-                          for pr in _PRIMITIVES]
-        }, indent=2))
+        # Exploit primitive mode (original)
+        p = PrimitiveRegistry()
+
+        if len(sys.argv) > 1:
+            pid = sys.argv[1].upper()
+            result = p.get(pid)
+            if result:
+                print(json.dumps(result, indent=2))
+            else:
+                print(f"Unknown primitive: {pid}")
+        else:
+            print(json.dumps({
+                "count": len(_PRIMITIVES),
+                "primitives": [{"id": pr.id, "name": pr.name, "position": pr.kill_chain_position}
+                              for pr in _PRIMITIVES]
+            }, indent=2))

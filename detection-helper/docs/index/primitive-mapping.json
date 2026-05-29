@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Telemetry concept primitives that bridge natural language to Defender XDR action names. Designed for LLM prompt injection — the LLM matches user prompts to these primitives, and code maps primitives to concrete telemetry-index.json actions.",
+    "usage": "Load this file to build the primitive catalog sent to the LLM. Each primitive maps to one or more actions in telemetry-index.json. Many-to-many mapping: one primitive can span multiple actions, and actions may appear under multiple primitives."
+  },
+  "primitives": [
+    {
+      "primitive": "process_creation",
+      "actions": ["Process Creation"],
+      "description": "A new process is started or spawned",
+      "indicators": ["new process", "process started", "spawned", "exec", "child process", "process launched", "created process"]
+    },
+    {
+      "primitive": "process_termination",
+      "actions": ["Process Termination"],
+      "description": "A process exits or is terminated",
+      "indicators": ["process exit", "process terminated", "process stopped", "process died", "process killed", "application closed"],
+      "note": "Telemetry gap: no dedicated ProcessTerminated ActionType in DeviceProcessEvents"
+    },
+    {
+      "primitive": "process_manipulation",
+      "actions": ["Process Injection", "LSASS Access"],
+      "description": "Reading or writing memory of another process, including credential dumping and code injection",
+      "indicators": ["process injection", "dll injection", "shellcode injection", "remote thread", "read process memory", "write process memory", "credential dump", "lsass access", "mimikatz", "memory access"]
+    },
+    {
+      "primitive": "file_activity",
+      "actions": ["File Create", "File Modify", "File Delete", "File Rename"],
+      "description": "A file is created, modified, deleted, or renamed on disk",
+      "indicators": ["file created", "file dropped", "file modified", "file changed", "file deleted", "file removed", "file renamed", "file moved", "new file", "drop file", "write file"]
+    },
+    {
+      "primitive": "registry_activity",
+      "actions": ["Registry Key Create", "Registry Value Set", "Registry Key Delete"],
+      "description": "Windows registry keys or values are created, modified, or deleted",
+      "indicators": ["registry key created", "registry value set", "registry modified", "registry key deleted", "reg add", "reg delete", "registry write", "run key", "registry change"],
+      "note": "Windows only — no registry on Linux/macOS"
+    },
+    {
+      "primitive": "network_connection",
+      "actions": ["Network Connection"],
+      "description": "A network connection is established, including C2, staging, or lateral movement",
+      "indicators": ["network connection", "outbound connection", "inbound connection", "tcp connection", "socket connect", "beacon", "c2 connection", "lateral movement", "network traffic"]
+    },
+    {
+      "primitive": "dns_resolution",
+      "actions": ["DNS Query"],
+      "description": "A DNS query is performed for domain resolution",
+      "indicators": ["dns query", "dns lookup", "domain resolution", "nslookup", "resolve dns", "dga", "domain queried"],
+      "note": "DNS over HTTPS (DoH) and DNS over TLS (DoT) bypass standard DNS visibility"
+    },
+    {
+      "primitive": "authentication",
+      "actions": ["User Logon", "AD Authentication", "Entra ID Sign-in"],
+      "description": "A user or service authenticates to a system, domain, or cloud identity provider",
+      "indicators": ["user logon", "user login", "interactive logon", "remote logon", "ad authentication", "kerberos", "ntlm", "entra signin", "azure ad signin", "service logon", "rdp logon"]
+    },
+    {
+      "primitive": "directory_services",
+      "actions": ["AD Directory Changes", "AD Reconnaissance"],
+      "description": "Active Directory objects are modified or queried, including account creation and domain reconnaissance",
+      "indicators": ["ad directory changes", "user account created", "user account deleted", "group changed", "ou modified", "ad object change", "ldap query", "ad enumeration", "bloodhound", "domain reconnaissance", "dcsync"]
+    },
+    {
+      "primitive": "service_management",
+      "actions": ["Service Installation"],
+      "description": "Windows services are created, started, stopped, or modified via the Service Control Manager",
+      "indicators": ["service created", "service installed", "service started", "service stopped", "service modified", "sc.exe", "services.msc", "new service", "windows service", "service control", "service persistence"]
+    },
+    {
+      "primitive": "scheduled_task",
+      "actions": ["Scheduled Task"],
+      "description": "A scheduled task or job is created, updated, or deleted",
+      "indicators": ["scheduled task", "task scheduler", "schtasks", "at command", "scheduled job", "cron equivalent", "task created", "task deleted"]
+    },
+    {
+      "primitive": "wmi_activity",
+      "actions": ["WMI Activity"],
+      "description": "Windows Management Instrumentation is used for persistence, remote management, or process creation",
+      "indicators": ["wmi", "wmi persistence", "wmi event subscription", "wmic", "wbem", "system.management", "wmi process created"]
+    },
+    {
+      "primitive": "driver_load",
+      "actions": ["Driver Load", "eBPF Activity"],
+      "description": "A kernel driver or module is loaded into the operating system",
+      "indicators": ["driver loaded", "kernel driver", "kernel module", "ebpf", "bpf filter", "sysmon driver load", "driver installation"]
+    },
+    {
+      "primitive": "image_load",
+      "actions": ["Image Load (DLL)"],
+      "description": "A DLL or shared library is loaded into a process",
+      "indicators": ["dll loaded", "image load", "module load", "library loaded", "dll injection load", "clr load", "assembly loaded"]
+    },
+    {
+      "primitive": "script_execution",
+      "actions": ["PowerShell Execution"],
+      "description": "A script or command is executed via a scripting engine such as PowerShell",
+      "indicators": ["powershell", "pwsh", "script execution", "powershell command", "encoded command", "invoke-expression", "iex", "script block", "command executed"]
+    },
+    {
+      "primitive": "account_management",
+      "actions": ["Local Account Changes"],
+      "description": "Local user accounts or security groups are created, modified, or deleted",
+      "indicators": ["user account created", "user account deleted", "user added to group", "local account", "user account modified", "security group created", "account changed"]
+    },
+    {
+      "primitive": "ipc_mechanism",
+      "actions": ["Named Pipe", "SMB Session"],
+      "description": "Inter-process communication via named pipes or SMB file sharing sessions",
+      "indicators": ["named pipe", "pipe created", "smb pipe", "ipc$", "smb session", "file share access", "network share", "smb connected"]
+    },
+    {
+      "primitive": "removable_media",
+      "actions": ["USB/Removable Media"],
+      "description": "A USB device or removable media is connected to or disconnected from the system",
+      "indicators": ["usb drive", "removable media", "usb mounted", "usb inserted", "pnp device", "external drive", "usb connected"]
+    },
+    {
+      "primitive": "email_activity",
+      "actions": ["Email Delivery", "Email URL Click"],
+      "description": "Email is delivered or a URL within an email is clicked by a recipient",
+      "indicators": ["email delivered", "email received", "phishing email", "url click", "safe links", "email link clicked", "email threat", "email malware"]
+    },
+    {
+      "primitive": "cloud_activity",
+      "actions": ["SaaS App Activity", "AI Agent Activity"],
+      "description": "Activity within cloud applications, SaaS services, or AI agent platforms",
+      "indicators": ["saas activity", "o365 activity", "sharepoint access", "teams activity", "github activity", "salesforce", "cloud app", "ai agent", "copilot action", "mcp server"]
+    }
+  ]
+}

@@ -1,17 +1,28 @@
 """Telemetry Resolver — deterministic lookup, validation, and anti-pattern checking.
 
+Designed as the **validation and data-access layer**, not the identification layer.
+Primitive identification is handled upstream by TelemetryPrimitiveResolver + LLM.
+
 Replaces in LLM prompt:
-  - telemetry-index.json keyword search instructions
   - keyword-aliases.md fuzzy matching prose
   - anti-patterns.md manual checking
   - schema column verification checklist
   - platform gap lookups
 
+Architecture:
+    LLM identifies primitives (e.g., "process_manipulation")
+    PrimitiveResolver maps primitives → action names
+    TelemetryResolver validates actions → schema, columns, gaps
+
 Usage:
     from tools.telemetry import TelemetryResolver
     r = TelemetryResolver()
-    results = r.resolve("process injection")
+    # Batch lookup after LLM primitive identification
+    entries = r.get_actions(["Process Injection", "LSASS Access"])
+    # Validation
     valid = r.validate_columns(["FileName", "ProcessName"], "DeviceProcessEvents")
+    # Fallback fuzzy search (when LLM is uncertain)
+    results = r.resolve("process injection")
 """
 
 from __future__ import annotations
@@ -76,11 +87,64 @@ class TelemetryResolver:
         return [m[0].to_dict() for m in matches[:top_n]]
 
     def get_action(self, action_name: str) -> Optional[TelemetryEntry]:
-        """Get a specific action by exact name."""
+        """Get a specific action by exact name.
+
+        For batch lookups, prefer get_actions() — O(n) for any number of names.
+        """
         for entry in self._actions:
             if entry.action.lower() == action_name.lower():
                 return entry
         return None
+
+    def get_actions(self, names: list[str]) -> list[TelemetryEntry]:
+        """Batch exact lookup by action name.  O(n) single scan.
+
+        Primary entry point after LLM has identified primitives and
+        PrimitiveResolver has mapped them to action names.
+
+        Unknown names are silently skipped — callers should validate
+        the LLM output or use resolve() as a fallback.
+        """
+        name_set = {n.lower().strip() for n in names}
+        return [e for e in self._actions if e.action.lower() in name_set]
+
+    def resolve_multi(self, queries: list[str], top_n: int = 5) -> list[dict]:
+        """Resolve multiple candidate queries in a single index scan.
+
+        Fallback path: use when the LLM is uncertain or the input is raw
+        user text without prior primitive identification.
+
+        Returns deduplicated results ranked by best match across all queries.
+        """
+        resolved = []
+        for q in queries:
+            q = q.lower().strip()
+            # Try alias first, but keep original as fallback — some aliases
+            # map to ActionType strings that won't match keywords/action names.
+            if q in self._aliases:
+                resolved.append(self._aliases[q])
+            resolved.append(q)  # always include original
+
+        matches: list[tuple[TelemetryEntry, float]] = []
+        for entry in self._actions:
+            best = max(self._score(q, entry) for q in resolved)
+            if best > 0:
+                matches.append((entry, best))
+
+        if not matches:
+            # Fuzzy fallback — collect close matches from all queries
+            all_kw = [kw.lower() for a in self._actions for kw in a.keywords]
+            close_kw: set[str] = set()
+            for q in resolved:
+                close_kw.update(
+                    get_close_matches(q, all_kw, n=top_n, cutoff=0.6)
+                )
+            for entry in self._actions:
+                if any(c in [k.lower() for k in entry.keywords] for c in close_kw):
+                    matches.append((entry, 0.3))
+
+        matches.sort(key=lambda x: x[1], reverse=True)
+        return [m[0].to_dict() for m in matches[:top_n]]
 
     def validate_columns(
         self, columns: list[str], table: str

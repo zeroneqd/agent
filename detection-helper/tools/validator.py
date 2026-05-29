@@ -7,12 +7,24 @@ A resolver is REQUIRED for a meaningful gate: it backs the column-validity and
 anti-pattern checks. Without it, those checks cannot run and the rule is treated
 as not-passed (the gate refuses to vouch for an unverified rule).
 
+Supports both single-rule and batch validation.  Use validate_batch() when
+the LLM has identified multiple primitives and generated multiple rules.
+
 Usage:
     from tools.validator import CrossAgentValidator, RuleProposal
     v = CrossAgentValidator(session, resolver)
+
+    # Single rule
     result = v.validate(RuleProposal(table="DeviceProcessEvents", ..., confidence="L3"))
     if not result.passed:
         print(result.halt_message())
+
+    # Batch — after LLM identifies multiple primitives
+    rules = [
+        RuleProposal(table="DeviceProcessEvents", ..., primitive="P1"),
+        RuleProposal(table="DeviceEvents", ..., primitive="P2"),
+    ]
+    results = v.validate_batch(rules)
 """
 
 from __future__ import annotations
@@ -87,6 +99,13 @@ class CrossAgentValidator:
             discrepancies=discrepancies,
             rule=rule_dict,
         )
+
+    def validate_batch(self, rules: list[RuleProposal]) -> list[ValidationResult]:
+        """Validate multiple rules.  Each rule runs independently.
+
+        Returns results in the same order as the input list.
+        """
+        return [self.validate(rule) for rule in rules]
 
     def _check_table(self, checks: list, discrepancies: list, rule: RuleProposal) -> None:
         phase2 = self.session.get("phases", {}).get("telemetry", {})
